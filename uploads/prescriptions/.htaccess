@@ -1,0 +1,29 @@
+# Security rules for prescription uploads
+# Prevent execution of any scripts
+<Files "*.php">
+    Deny from all
+</Files>
+
+<Files "*.pl">
+    Deny from all
+</Files>
+
+<Files "*.py">
+    Deny from all
+</Files>
+
+<Files "*.sh">
+    Deny from all
+</Files>
+
+# Allow only image and PDF files
+<FilesMatch "\.(jpg|jpeg|png|gif|pdf)$">
+    Order Allow,Deny
+    Allow from all
+</FilesMatch>
+
+# Deny all other file types
+<FilesMatch "^(?!.*\.(jpg|jpeg|png|gif|pdf)$).*$">
+    Order Deny,Allow
+    Deny from all
+</FilesMatch>

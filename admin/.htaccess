@@ -1,0 +1,38 @@
+# Admin Panel Security - Apache Configuration
+# Prevents directory browsing and adds extra security
+
+# Disable directory browsing
+Options -Indexes
+
+# Prevent access to sensitive files
+<FilesMatch "\.(htaccess|htpasswd|ini|log|sql|bak|backup|old)$">
+    Order allow,deny
+    Deny from all
+</FilesMatch>
+
+# Protect auth_check.php from direct access
+<Files "auth_check.php">
+    Order allow,deny
+    Deny from all
+</Files>
+
+# Enable error logging but hide errors from users
+php_flag display_errors Off
+php_flag log_errors On
+
+# Set secure session settings
+php_value session.cookie_httponly 1
+php_value session.use_only_cookies 1
+php_value session.cookie_secure 0
+
+# Prevent clickjacking
+<IfModule mod_headers.c>
+    Header always append X-Frame-Options SAMEORIGIN
+    Header set X-XSS-Protection "1; mode=block"
+    Header set X-Content-Type-Options "nosniff"
+</IfModule>
+
+# Custom error pages (optional)
+# ErrorDocument 403 /admin/login.php
+# ErrorDocument 404 /admin/login.php
+

@@ -1,0 +1,30 @@
+# Security rules for uploads directory
+# Prevent execution of PHP files
+<Files "*.php">
+    Deny from all
+</Files>
+
+# Prevent execution of other executable files
+<Files "*.pl">
+    Deny from all
+</Files>
+
+<Files "*.py">
+    Deny from all
+</Files>
+
+<Files "*.sh">
+    Deny from all
+</Files>
+
+# Allow only specific file types
+<FilesMatch "\.(jpg|jpeg|png|gif|pdf)$">
+    Order Allow,Deny
+    Allow from all
+</FilesMatch>
+
+# Deny all other file types
+<FilesMatch "^(?!.*\.(jpg|jpeg|png|gif|pdf)$).*$">
+    Order Deny,Allow
+    Deny from all
+</FilesMatch>

@@ -1,0 +1,36 @@
+# Security rules for root directory
+# Prevent access to sensitive files
+<Files "config/*">
+    Order Deny,Allow
+    Deny from all
+</Files>
+
+# Prevent access to .sql files
+<Files "*.sql">
+    Order Deny,Allow
+    Deny from all
+</Files>
+
+# Prevent access to backup files
+<Files "*.bak">
+    Order Deny,Allow
+    Deny from all
+</Files>
+
+<Files "*.backup">
+    Order Deny,Allow
+    Deny from all
+</Files>
+
+# Prevent access to log files
+<Files "*.log">
+    Order Deny,Allow
+    Deny from all
+</Files>
+
+# Prevent directory browsing
+Options -Indexes
+
+# Enable error pages
+ErrorDocument 404 /index.php
+ErrorDocument 403 /index.php
