@@ -7,7 +7,7 @@ include 'auth_check.php';
 $message = '';
 $error_message = '';
 
-// Handle payment status updates
+// Handle payment status updates and deletions
 if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     $action = $_POST['action'] ?? '';
     
@@ -40,12 +40,46 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                 ");
                 $stmt->execute([$order_payment_status, $_POST['payment_id']]);
                 
-                $message = 'Payment status updated successfully in both orders and payments!';
-                break;
+                $_SESSION['success_message'] = 'Payment status updated successfully in both orders and payments!';
+                header('Location: payments.php');
+                exit();
+                
+            case 'delete':
+                // Get the order_id before deleting the payment
+                $stmt = $pdo->prepare("SELECT order_id FROM customer_payments WHERE id = ?");
+                $stmt->execute([$_POST['payment_id']]);
+                $order_id = $stmt->fetchColumn();
+                
+                // Delete the payment record
+                $stmt = $pdo->prepare("DELETE FROM customer_payments WHERE id = ?");
+                $stmt->execute([$_POST['payment_id']]);
+                
+                // Update the order's payment status to pending if it had this payment
+                if ($order_id) {
+                    $stmt = $pdo->prepare("UPDATE orders SET payment_status = 'pending' WHERE id = ?");
+                    $stmt->execute([$order_id]);
+                }
+                
+                $_SESSION['success_message'] = 'Payment deleted successfully!';
+                header('Location: payments.php');
+                exit();
         }
     } catch (PDOException $e) {
-        $error_message = 'Operation failed: ' . $e->getMessage();
+        $_SESSION['error_message'] = 'Operation failed: ' . $e->getMessage();
+        header('Location: payments.php');
+        exit();
     }
+}
+
+// Display messages from session
+if (isset($_SESSION['success_message'])) {
+    $message = $_SESSION['success_message'];
+    unset($_SESSION['success_message']);
+}
+
+if (isset($_SESSION['error_message'])) {
+    $error_message = $_SESSION['error_message'];
+    unset($_SESSION['error_message']);
 }
 
 // Get payment statistics
@@ -259,17 +293,12 @@ $payments = $stmt->fetchAll();
                                                 </span>
                                             </td>
                                             <td>
-                                                <span class="badge bg-<?php 
-                                                    echo match($payment['payment_status']) {
-                                                        'completed' => 'success',
-                                                        'pending' => 'warning',
-                                                        'failed' => 'danger',
-                                                        'refunded' => 'info',
-                                                        default => 'secondary'
-                                                    };
-                                                ?>">
-                                                    <?php echo ucfirst($payment['payment_status']); ?>
-                                                </span>
+                                                <select class="form-select form-select-sm" data-current-status="<?php echo htmlspecialchars($payment['payment_status']); ?>" onchange="onPaymentStatusChange(<?php echo $payment['id']; ?>, this)">
+                                                    <option value="pending" <?php echo $payment['payment_status'] === 'pending' ? 'selected' : ''; ?>>Pending</option>
+                                                    <option value="completed" <?php echo $payment['payment_status'] === 'completed' ? 'selected' : ''; ?>>Completed</option>
+                                                    <option value="failed" <?php echo $payment['payment_status'] === 'failed' ? 'selected' : ''; ?>>Failed</option>
+                                                    <option value="refunded" <?php echo $payment['payment_status'] === 'refunded' ? 'selected' : ''; ?>>Refunded</option>
+                                                </select>
                                             </td>
                                             <td>
                                                 <span class="badge bg-<?php 
@@ -286,16 +315,25 @@ $payments = $stmt->fetchAll();
                                                 </span>
                                             </td>
                                             <td>
-                                                <button type="button" class="btn btn-outline-primary btn-sm" 
-                                                        onclick="viewPayment(<?php echo htmlspecialchars(json_encode($payment)); ?>)">
-                                                    <i class="fas fa-eye"></i>
-                                                </button>
-                                                <?php if ($payment['payment_status'] === 'pending'): ?>
-                                                <button type="button" class="btn btn-outline-success btn-sm" 
-                                                        onclick="updateStatus(<?php echo $payment['id']; ?>, 'completed')">
-                                                    <i class="fas fa-check"></i>
-                                                </button>
-                                                <?php endif; ?>
+                                                <div class="btn-group btn-group-sm">
+                                                    <button type="button" class="btn btn-outline-primary" 
+                                                            onclick="viewPayment(<?php echo htmlspecialchars(json_encode($payment)); ?>)"
+                                                            title="View Details">
+                                                        <i class="fas fa-eye"></i>
+                                                    </button>
+                                                    <?php if ($payment['payment_status'] === 'pending'): ?>
+                                                    <button type="button" class="btn btn-outline-success" 
+                                                            onclick="updateStatus(<?php echo $payment['id']; ?>, 'completed')"
+                                                            title="Mark as Completed">
+                                                        <i class="fas fa-check"></i>
+                                                    </button>
+                                                    <?php endif; ?>
+                                                    <button type="button" class="btn btn-outline-danger" 
+                                                            onclick="confirmDelete(<?php echo $payment['id']; ?>, '<?php echo htmlspecialchars($payment['payment_number']); ?>')"
+                                                            title="Delete Payment">
+                                                        <i class="fas fa-trash"></i>
+                                                    </button>
+                                                </div>
                                             </td>
                                         </tr>
                                         <?php endforeach; ?>
@@ -386,6 +424,44 @@ $payments = $stmt->fetchAll();
         </div>
     </div>
 
+    <!-- Delete Confirmation Modal -->
+    <div class="modal fade" id="deletePaymentModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <form method="POST" id="deletePaymentForm">
+                    <div class="modal-header bg-danger text-white">
+                        <h5 class="modal-title">
+                            <i class="fas fa-exclamation-triangle me-2"></i>Confirm Delete
+                        </h5>
+                        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body">
+                        <input type="hidden" name="action" value="delete">
+                        <input type="hidden" name="payment_id" id="delete_payment_id">
+                        
+                        <div class="text-center py-3">
+                            <i class="fas fa-exclamation-circle text-danger mb-3" style="font-size: 4rem;"></i>
+                            <h5>Are you sure you want to delete this payment?</h5>
+                            <p class="text-muted mb-3">Payment Number: <strong id="delete_payment_number"></strong></p>
+                            <div class="alert alert-warning">
+                                <i class="fas fa-info-circle me-2"></i>
+                                <strong>Warning:</strong> This action cannot be undone. The associated order's payment status will be reset to "pending".
+                            </div>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                            <i class="fas fa-times me-2"></i>Cancel
+                        </button>
+                        <button type="submit" class="btn btn-danger">
+                            <i class="fas fa-trash me-2"></i>Delete Payment
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script src="assets/js/crud-ajax.js"></script>
     <script src="assets/js/universal-crud.js"></script>
@@ -425,6 +501,46 @@ $payments = $stmt->fetchAll();
                     }
                 })
                 .catch(() => showToast('Update failed', 'error'));
+        }
+        
+        function onPaymentStatusChange(paymentId, selectEl) {
+            const newStatus = selectEl.value;
+            const prevStatus = selectEl.getAttribute('data-current-status');
+            if (!confirm('Change payment status from ' + prevStatus + ' to ' + newStatus + '?')) {
+                selectEl.value = prevStatus;
+                return;
+            }
+
+            const formData = new FormData();
+            formData.append('action', 'update_status');
+            formData.append('payment_id', paymentId);
+            formData.append('payment_status', newStatus);
+            formData.append('notes', '');
+            formData.append('transaction_id', '');
+            formData.append('table', 'payments');
+
+            fetch('ajax_handler.php', { method: 'POST', body: formData })
+                .then(r => r.json())
+                .then(data => {
+                    if (data.success) {
+                        showToast('Payment status updated', 'success');
+                        selectEl.setAttribute('data-current-status', newStatus);
+                    } else {
+                        showToast(data.message || 'Update failed', 'error');
+                        selectEl.value = prevStatus;
+                    }
+                })
+                .catch(() => {
+                    showToast('Update failed', 'error');
+                    selectEl.value = prevStatus;
+                });
+        }
+
+        function confirmDelete(paymentId, paymentNumber) {
+            document.getElementById('delete_payment_id').value = paymentId;
+            document.getElementById('delete_payment_number').textContent = paymentNumber;
+            
+            new bootstrap.Modal(document.getElementById('deletePaymentModal')).show();
         }
     </script>
 </body>

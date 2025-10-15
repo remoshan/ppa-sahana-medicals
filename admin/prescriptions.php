@@ -24,18 +24,33 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                     $stmt = $pdo->prepare("UPDATE prescriptions SET status = ? WHERE id = ?");
                     $stmt->execute([$_POST['status'], $_POST['id']]);
                 }
-                $message = 'Prescription status updated successfully!';
-                break;
+                $_SESSION['success_message'] = 'Prescription status updated successfully!';
+                header('Location: prescriptions.php');
+                exit();
                 
             case 'delete':
                 $stmt = $pdo->prepare("DELETE FROM prescriptions WHERE id = ?");
                 $stmt->execute([$_POST['id']]);
-                $message = 'Prescription deleted successfully!';
-                break;
+                $_SESSION['success_message'] = 'Prescription deleted successfully!';
+                header('Location: prescriptions.php');
+                exit();
         }
     } catch (PDOException $e) {
-        $error_message = 'Operation failed: ' . $e->getMessage();
+        $_SESSION['error_message'] = 'Operation failed: ' . $e->getMessage();
+        header('Location: prescriptions.php');
+        exit();
     }
+}
+
+// Display messages from session
+if (isset($_SESSION['success_message'])) {
+    $message = $_SESSION['success_message'];
+    unset($_SESSION['success_message']);
+}
+
+if (isset($_SESSION['error_message'])) {
+    $error_message = $_SESSION['error_message'];
+    unset($_SESSION['error_message']);
 }
 
 // Get prescriptions with customer information
@@ -368,6 +383,43 @@ $medicines = $stmt->fetchAll();
             } else {
                 // Use AJAX to update status
                 updatePrescriptionStatusAjax(prescriptionId, status);
+            }
+        }
+        
+        async function updatePrescriptionStatusAjax(prescriptionId, status) {
+            const formData = new FormData();
+            formData.append('action', 'update_status');
+            formData.append('id', prescriptionId);
+            formData.append('status', status);
+            formData.append('table', 'prescriptions');
+            
+            try {
+                const response = await fetch('ajax_handler.php', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    showToast(result.message || 'Status updated successfully!', 'success');
+                    // Update the data-current-status attribute
+                    document.querySelectorAll('.status-select').forEach(function(select) {
+                        if (select.onchange && select.onchange.toString().includes(prescriptionId)) {
+                            select.setAttribute('data-current-status', status);
+                        }
+                    });
+                    setTimeout(() => location.reload(), 1000);
+                } else {
+                    showToast(result.message || 'Status update failed', 'error');
+                    // Reset the select to previous value
+                    event.target.value = event.target.getAttribute('data-current-status');
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                showToast('An error occurred. Please try again.', 'error');
+                // Reset the select to previous value
+                event.target.value = event.target.getAttribute('data-current-status');
             }
         }
         

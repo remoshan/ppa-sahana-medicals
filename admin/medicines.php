@@ -9,64 +9,18 @@ include 'auth_check.php';
 $message = '';
 $error_message = '';
 
-// Handle form submissions
-if ($_SERVER['REQUEST_METHOD'] == 'POST') {
-    $action = $_POST['action'] ?? '';
-    
-    try {
-        switch ($action) {
-            case 'create':
-                $stmt = $pdo->prepare("
-                    INSERT INTO medicines (name, description, category_id, manufacturer, price, quantity, expiry_date, batch_number, prescription_required, status) 
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                ");
-                $stmt->execute([
-                    $_POST['name'],
-                    $_POST['description'],
-                    $_POST['category_id'] ?: null,
-                    $_POST['manufacturer'],
-                    $_POST['price'],
-                    $_POST['quantity'],
-                    $_POST['expiry_date'] ?: null,
-                    $_POST['batch_number'],
-                    isset($_POST['prescription_required']) ? 1 : 0,
-                    $_POST['status']
-                ]);
-                $message = 'Medicine added successfully!';
-                break;
-                
-            case 'update':
-                $stmt = $pdo->prepare("
-                    UPDATE medicines 
-                    SET name = ?, description = ?, category_id = ?, manufacturer = ?, price = ?, quantity = ?, expiry_date = ?, batch_number = ?, prescription_required = ?, status = ?
-                    WHERE id = ?
-                ");
-                $stmt->execute([
-                    $_POST['name'],
-                    $_POST['description'],
-                    $_POST['category_id'] ?: null,
-                    $_POST['manufacturer'],
-                    $_POST['price'],
-                    $_POST['quantity'],
-                    $_POST['expiry_date'] ?: null,
-                    $_POST['batch_number'],
-                    isset($_POST['prescription_required']) ? 1 : 0,
-                    $_POST['status'],
-                    $_POST['id']
-                ]);
-                $message = 'Medicine updated successfully!';
-                break;
-                
-            case 'delete':
-                $stmt = $pdo->prepare("DELETE FROM medicines WHERE id = ?");
-                $stmt->execute([$_POST['id']]);
-                $message = 'Medicine deleted successfully!';
-                break;
-        }
-    } catch (PDOException $e) {
-        $error_message = 'Operation failed: ' . $e->getMessage();
-    }
+// Display messages from session
+if (isset($_SESSION['success_message'])) {
+    $message = $_SESSION['success_message'];
+    unset($_SESSION['success_message']);
 }
+
+if (isset($_SESSION['error_message'])) {
+    $error_message = $_SESSION['error_message'];
+    unset($_SESSION['error_message']);
+}
+
+// Note: Form submissions are handled via AJAX (ajax_handler.php) to prevent double submissions
 
 // Get medicines with category names
 $search = $_GET['search'] ?? '';
@@ -267,6 +221,7 @@ $categories = $stmt->fetchAll();
                     <div class="modal-body">
                         <input type="hidden" name="action" id="modalAction" value="create">
                         <input type="hidden" name="id" id="modalId">
+                        <input type="hidden" name="image_url" id="image_url" value="">
                         
                         <div class="row">
                             <div class="col-md-6 mb-3">
@@ -384,9 +339,24 @@ $categories = $stmt->fetchAll();
             const medicineForm = document.getElementById('medicineForm');
             const deleteForm = document.getElementById('deleteForm');
             
+            let isSubmitting = false; // Prevent double submission
+            
             // Handle medicine form (create/update)
             medicineForm.addEventListener('submit', async function(e) {
                 e.preventDefault();
+                e.stopPropagation();
+                
+                // Prevent double submission
+                if (isSubmitting) {
+                    return false;
+                }
+                isSubmitting = true;
+                
+                const submitBtn = this.querySelector('button[type="submit"]');
+                const originalText = submitBtn.innerHTML;
+                submitBtn.disabled = true;
+                submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Saving...';
+                
                 const formData = new FormData(this);
                 formData.append('table', 'medicines');
                 
@@ -402,18 +372,39 @@ $categories = $stmt->fetchAll();
                         showToast(data.message, 'success');
                         const modal = bootstrap.Modal.getInstance(document.getElementById('medicineModal'));
                         modal.hide();
-                        setTimeout(() => location.reload(), 1000);
+                        setTimeout(() => {
+                            window.location.href = 'medicines.php';
+                        }, 1000);
                     } else {
                         showToast(data.message, 'error');
+                        submitBtn.disabled = false;
+                        submitBtn.innerHTML = originalText;
+                        isSubmitting = false;
                     }
                 } catch (error) {
                     showToast('An error occurred. Please try again.', 'error');
+                    submitBtn.disabled = false;
+                    submitBtn.innerHTML = originalText;
+                    isSubmitting = false;
                 }
             });
             
             // Handle delete form
             deleteForm.addEventListener('submit', async function(e) {
                 e.preventDefault();
+                e.stopPropagation();
+                
+                // Prevent double submission
+                if (isSubmitting) {
+                    return false;
+                }
+                isSubmitting = true;
+                
+                const submitBtn = this.querySelector('button[type="submit"]');
+                const originalText = submitBtn.innerHTML;
+                submitBtn.disabled = true;
+                submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Deleting...';
+                
                 const formData = new FormData(this);
                 formData.append('table', 'medicines');
                 
@@ -429,13 +420,30 @@ $categories = $stmt->fetchAll();
                         showToast(data.message, 'success');
                         const modal = bootstrap.Modal.getInstance(document.getElementById('deleteModal'));
                         modal.hide();
-                        setTimeout(() => location.reload(), 1000);
+                        setTimeout(() => {
+                            window.location.href = 'medicines.php';
+                        }, 1000);
                     } else {
                         showToast(data.message, 'error');
+                        submitBtn.disabled = false;
+                        submitBtn.innerHTML = originalText;
+                        isSubmitting = false;
                     }
                 } catch (error) {
                     showToast('An error occurred. Please try again.', 'error');
+                    submitBtn.disabled = false;
+                    submitBtn.innerHTML = originalText;
+                    isSubmitting = false;
                 }
+            });
+            
+            // Reset submission flag when modal is closed
+            document.getElementById('medicineModal').addEventListener('hidden.bs.modal', function() {
+                isSubmitting = false;
+            });
+            
+            document.getElementById('deleteModal').addEventListener('hidden.bs.modal', function() {
+                isSubmitting = false;
             });
         });
         

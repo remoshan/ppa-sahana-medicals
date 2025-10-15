@@ -110,9 +110,17 @@ function handleMedicines($pdo, $action) {
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ");
             $stmt->execute([
-                $_POST['name'], $_POST['description'], $_POST['category_id'], $_POST['manufacturer'],
-                $_POST['price'], $_POST['quantity'], $_POST['expiry_date'], $_POST['batch_number'],
-                isset($_POST['prescription_required']) ? 1 : 0, $_POST['status'], $_POST['image_url'] ?? ''
+                $_POST['name'], 
+                $_POST['description'], 
+                !empty($_POST['category_id']) ? $_POST['category_id'] : null, 
+                $_POST['manufacturer'],
+                $_POST['price'], 
+                $_POST['quantity'], 
+                !empty($_POST['expiry_date']) ? $_POST['expiry_date'] : null, 
+                $_POST['batch_number'],
+                isset($_POST['prescription_required']) ? 1 : 0, 
+                $_POST['status'], 
+                $_POST['image_url'] ?? ''
             ]);
             $response['success'] = true;
             $response['message'] = 'Medicine added successfully!';
@@ -127,9 +135,18 @@ function handleMedicines($pdo, $action) {
                 WHERE id = ?
             ");
             $stmt->execute([
-                $_POST['name'], $_POST['description'], $_POST['category_id'], $_POST['manufacturer'],
-                $_POST['price'], $_POST['quantity'], $_POST['expiry_date'], $_POST['batch_number'],
-                isset($_POST['prescription_required']) ? 1 : 0, $_POST['status'], $_POST['image_url'] ?? '', $_POST['id']
+                $_POST['name'], 
+                $_POST['description'], 
+                !empty($_POST['category_id']) ? $_POST['category_id'] : null, 
+                $_POST['manufacturer'],
+                $_POST['price'], 
+                $_POST['quantity'], 
+                !empty($_POST['expiry_date']) ? $_POST['expiry_date'] : null, 
+                $_POST['batch_number'],
+                isset($_POST['prescription_required']) ? 1 : 0, 
+                $_POST['status'], 
+                $_POST['image_url'] ?? '', 
+                $_POST['id']
             ]);
             $response['success'] = true;
             $response['message'] = 'Medicine updated successfully!';
